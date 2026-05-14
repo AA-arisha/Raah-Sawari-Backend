@@ -57,13 +57,13 @@ async function predictETA(pickup, drop) {
   );
 }
 
-async function predictFare(pickup, destination, vehicleType, durationMin) {
+async function predictFare(pickup, drop, vehicleType, durationMin) {
   return aiPost(
     process.env.FARE_SERVICE_URL || "http://localhost:3001",
     "/predict-fare",
     {
       pickup,
-      destination,
+      drop,
       vehicle_type : vehicleType,
       duration_min : durationMin
     }

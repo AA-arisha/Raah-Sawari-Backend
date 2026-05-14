@@ -9,52 +9,49 @@ export const registerUser = async (data) => {
     name,
     email,
     password,
-    role: rawRole,         // ✅ FIX #1: destructure as rawRole to avoid const reassignment
+    role: rawRole,
     vehicleType,
-    vehicleModel,
-    vehicleNumber,
-    vehicleColor,
-    cnicFront,             // now a Cloudinary URL string
-    license,               // now a Cloudinary URL string
   } = data;
 
-  const role = rawRole?.toUpperCase();  // ✅ FIX #1: assign to new const
+  const role = (rawRole || "RIDER").toUpperCase();
 
-  // ✅ FIX #2: role is already uppercased, Joi enum "RIDER"/"DRIVER" will match
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) throw new AppError("User already exists", 400);
 
   const hashedPassword = await bcrypt.hash(password, 10);
 
-  const user = await prisma.user.create({
-    data: {
-      name,
-      email,
-      password: hashedPassword,
-      role,
-      isVerified: role === "RIDER" ? true : false, // driver needs admin approval
-    },
-  });
 
-  // DRIVER PROFILE
-  if (role === "DRIVER") {
-    await prisma.driverProfile.create({
+  const user = await prisma.$transaction(async (tx) => {
+    const createdUser = await tx.user.create({
       data: {
-        userId: user.id,
-        vehicleType,
-        vehicleModel,
-        vehicleNumber,
-        vehicleColor,
-        cnicFront,   // ✅ FIX #4: Cloudinary URL string
-        license,     // ✅ FIX #4: Cloudinary URL string
-        // ✅ FIX #3: cnicBack removed entirely
+        name,
+        email,
+        password: hashedPassword,
+        role,
       },
     });
-  }
+
+    if (role === "DRIVER") {
+      if (!vehicleType) {
+        throw new AppError("Vehicle type is required for drivers", 400);
+      }
+
+      await tx.driver.create({
+        data: {
+          userId: createdUser.id,
+          vehicleType: vehicleType.toUpperCase(),
+        },
+      });
+    }
+
+    return createdUser;
+  });
 
   return user;
 };
 
+
+// LOGIN
 export const loginUser = async ({ email, password }) => {
   const user = await prisma.user.findUnique({ where: { email } });
 
@@ -63,11 +60,10 @@ export const loginUser = async ({ email, password }) => {
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) throw new AppError("Invalid email or password", 401);
 
-  if (!user.isVerified) {
-    throw new AppError("Account not verified by admin", 403);
-  }
-
   const token = generateToken({ id: user.id, role: user.role });
 
-  return { user, token };
+
+  const { password: _, ...safeUser } = user;
+
+  return { user: safeUser, token };
 };

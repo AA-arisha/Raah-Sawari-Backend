@@ -14,31 +14,68 @@ enum Role {
   ADMIN
 }
 
-model User {
-  id          String   @id @default(uuid())
-  name        String
-  email       String   @unique
-  password    String
-  role        Role
-  isVerified  Boolean  @default(false)
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  driverProfile DriverProfile?
+enum VehicleType {
+  BIKE
+  CAR
+  RICKSHAW
 }
 
-model DriverProfile {
-  id              String @id @default(uuid())
+enum RideStatus {
+  REQUESTED
+  ACCEPTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
 
-  vehicleType     String
-  vehicleModel    String
-  vehicleNumber   String
-  vehicleColor    String
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(RIDER)
 
-  cnicFront       String
-  license         String
+  rides     Ride[]   @relation("UserRides")
+  driver    Driver?
 
-  userId          String @unique
-  user            User   @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+}
+
+model Driver {
+  id            Int         @id @default(autoincrement())
+
+  userId        Int         @unique
+  user          User        @relation(fields: [userId], references: [id])
+
+  vehicleType   VehicleType
+  isAvailable   Boolean     @default(false)
+
+  currentRideId Int?        @unique
+  currentRide   Ride?       @relation("CurrentRide", fields: [currentRideId], references: [id])
+
+  rides         Ride[]      @relation("DriverRides")
+
+  createdAt     DateTime    @default(now())
+}
+
+model Ride {
+  id            Int         @id @default(autoincrement())
+
+  userId        Int
+  driverId      Int?
+
+  user          User        @relation("UserRides", fields: [userId], references: [id])
+  driver        Driver?     @relation("DriverRides", fields: [driverId], references: [id])
+  assignedDriver Driver?    @relation("CurrentRide")
+
+  pickup        String
+  drop          String
+
+  vehicleType   VehicleType
+  status        RideStatus  @default(REQUESTED)
+
+  fare          Float?
+
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 }

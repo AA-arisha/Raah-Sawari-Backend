@@ -11,9 +11,7 @@
  *   5. Merge into one clean response
  */
 
-import { reverseGeocode }  from "../utils/geocode.js";
 import { predictETA, predictFare } from "../utils/aiClient.js";
-import { haversineKm }     from "../utils/haversine.js";
 import { createError }     from "../middlewares/errorHandler.js";
 
 const VEHICLES = ["bike", "car", "rickshaw"];
@@ -29,14 +27,7 @@ const VEHICLE_EMOJI = { bike: "🛵", car: "🚗", rickshaw: "🛺" };
  * @returns {Promise<object>}
  */
 async function getRideEstimate(pickup, drop) {
-  // ── Step 1: Geocode coordinates → address strings ──────────────────────────
-  // const [pickupAddr, dropAddr] = await Promise.all([
-  //   reverseGeocode(pickup.lat, pickup.lng),
-  //   reverseGeocode(drop.lat,   drop.lng)
-  // ]);
-
-  // ── Step 2: Distance ────────────────────────────────────────────────────────
-
+ 
   // ── Step 3: ETA for all vehicles (one call, Python returns all 3) ──────────
   const etaResponse = await predictETA(pickup, drop);
 
@@ -50,6 +41,8 @@ async function getRideEstimate(pickup, drop) {
     etaByVehicle[ride.vehicle] = ride.total_time_min;
   });
 
+
+
   // ── Step 4: Fare for all 3 vehicles in parallel ────────────────────────────
   const farePromises = VEHICLES.map((v) =>
     predictFare(
@@ -57,13 +50,17 @@ async function getRideEstimate(pickup, drop) {
       drop,
       v,
       etaByVehicle[v] ?? 15   // fallback 15 min if vehicle not in ETA response
-    ).catch((err) => ({
-      vehicle          : v,
-      _error           : err.message,
-      min_fare         : null,
-      recommended_fare : null,
-      max_fare         : null
-    }))
+    ).catch((err) => {
+  console.error("FARE ERROR:", v, err.message);
+
+  return {
+    vehicle: v,
+    _error: err.message,
+    min_fare: null,
+    recommended_fare: null,
+    max_fare: null
+  };
+})
   );
 
   const fareResults = await Promise.all(farePromises);
